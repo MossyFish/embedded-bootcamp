@@ -40,6 +40,7 @@
 #define PWM_MIN_COUNTS 3200 // 1 ms
 #define PWM_MAX_COUNTS 6400 // 2 ms
 #define ADC_MAX 1023 // 10 bit max
+#define ADC_SPI_FRAME_SIZE 3 // start bit + control byte + dummy byte
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -97,10 +98,14 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  // start at 1ms so the motor gets a safe pulse before the first adc read
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, PWM_MIN_COUNTS);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET); // CS idles high
+
+  // start bit, SGL=1 + channel 0 (pot is on CH0), dummy byte for rest of the result
+  // only needs to be set up once, not every loop
+  uint8_t tx[ADC_SPI_FRAME_SIZE] = {0x01, 0x80, 0x00};
+  uint8_t rx[ADC_SPI_FRAME_SIZE];
+  HAL_StatusTypeDef spi_status;
 
   /* USER CODE END 2 */
 
@@ -110,14 +115,16 @@ int main(void)
   {
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
-    // start bit, SGL=1 + channel 0 (pot is on CH0), dummy byte for rest of the result
-    uint8_t tx[3] = {0x01, 0x80, 0x00};
-    uint8_t rx[3];
-
     // adc only listens while CS is low
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
-    HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3, HAL_MAX_DELAY);
+    spi_status = HAL_SPI_TransmitReceive(&hspi1, tx, rx, ADC_SPI_FRAME_SIZE, HAL_MAX_DELAY);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+
+    // let us know during debugging if the SPI transaction failed
+    if (spi_status != HAL_OK)
+    {
+      Error_Handler();
+    }
 
     // B9 and B8 are the low 2 bits of rx[1] and B7 B0 are rx[2] so theyre 0 to 1023 together
     uint16_t adc = ((rx[1] & 0x03) << 8) | rx[2];
