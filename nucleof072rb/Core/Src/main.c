@@ -96,6 +96,7 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, PWM_MIN_COUNTS);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 
